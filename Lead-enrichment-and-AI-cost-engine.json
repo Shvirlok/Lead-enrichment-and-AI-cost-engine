@@ -1,0 +1,733 @@
+{
+  "name": "My workflow 2",
+  "nodes": [
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "leads/v1/ingest",
+        "responseMode": "responseNode",
+        "options": {
+          "rawBody": false
+        }
+      },
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2.1,
+      "position": [
+        -1472,
+        16
+      ],
+      "id": "bbc4238e-21a3-4316-a21c-5ea2448b6a9f",
+      "name": "Webhook",
+      "webhookId": "ff26eb7f-acd3-498c-96bc-86420cbc0638"
+    },
+    {
+      "parameters": {
+        "chatId": "7197857597",
+        "text": "=🎯 OUTBOUND LEAD QUALIFIED\n\n🏢 Company: {{ $('Email payload').item.json.company_name }}\n✉️️ Email: {{ $('Email payload').item.json.email }}\n📊 Status: {{ $('Email payload').item.json.qualification }}\n\n💡 Icebreaker:\n{{ $('Email payload').item.json.icebreaker }}\n\n⚠️ Pain Point:\n{{ $('Email payload').item.json.pain_point }}\n\n🚀 Value Prop:\n{{ $('Email payload').item.json.value_prop }}",
+        "replyMarkup": "inlineKeyboard",
+        "inlineKeyboard": {
+          "rows": [
+            {
+              "row": {
+                "buttons": [
+                  {
+                    "text": "=✅ Approve & Draft",
+                    "additionalFields": {
+                      "callback_data": "=approve_{{ $('Lead scoring engine').item.json.email }}"
+                    }
+                  },
+                  {
+                    "text": "❌ Reject",
+                    "additionalFields": {
+                      "callback_data": "=reject_{{ $('Lead scoring engine').item.json.email }}"
+                    }
+                  }
+                ]
+              }
+            }
+          ]
+        },
+        "additionalFields": {}
+      },
+      "type": "n8n-nodes-base.telegram",
+      "typeVersion": 1.2,
+      "position": [
+        1120,
+        -80
+      ],
+      "id": "878103b8-b462-422b-bc2e-451d22e9554d",
+      "name": "Send a text message",
+      "webhookId": "9dade690-86d9-4e21-bdec-bc90ded22830",
+      "credentials": {
+        "telegramApi": {
+          "id": "R6iqEzpLFW6wejK6",
+          "name": "Telegram account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "modelId": {
+          "__rl": true,
+          "value": "models/gemini-2.5-flash",
+          "mode": "list",
+          "cachedResultName": "models/gemini-2.5-flash"
+        },
+        "messages": {
+          "values": [
+            {
+              "content": "=Analyze the target company: {{ $json.company_name }}. \nWeb context: {{ $json.context_summary }}. \nReturn a pure JSON object without markdown formatting:\n{\n  \"qualification_status\": \"qualified\",\n  \"value_prop\": \"short b2b value proposition\",\n  \"personalized_icebreaker\": \"one sentence icebreaker referencing company context\",\n  \"pain_point\": \"likely sales or automation challenge\"\n}"
+            }
+          ]
+        },
+        "builtInTools": {},
+        "options": {}
+      },
+      "type": "@n8n/n8n-nodes-langchain.googleGemini",
+      "typeVersion": 1.2,
+      "position": [
+        208,
+        -160
+      ],
+      "id": "10705670-b0a9-4c28-b712-59cc8c77a83a",
+      "name": "Message a model",
+      "retryOnFail": true,
+      "waitBetweenTries": 2,
+      "credentials": {
+        "googlePalmApi": {
+          "id": null,
+          "name": "",
+          "__aiGatewayManaged": true
+        }
+      },
+      "onError": "continueRegularOutput"
+    },
+    {
+      "parameters": {
+        "updates": [
+          "callback_query"
+        ],
+        "additionalFields": {}
+      },
+      "type": "n8n-nodes-base.telegramTrigger",
+      "typeVersion": 1.5,
+      "position": [
+        -1472,
+        432
+      ],
+      "id": "c97d4841-8af6-43c6-9f9a-e90d30f9fc0f",
+      "name": "Telegram Trigger",
+      "webhookId": "5d2c2a34-2c6e-46e9-afb8-1da87e916bd1",
+      "credentials": {
+        "telegramApi": {
+          "id": "R6iqEzpLFW6wejK6",
+          "name": "Telegram account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "resource": "draft",
+        "subject": "=Partnership Opportunity // {{ $('Lead context from DB').item.json.company_name }}",
+        "message": "={{ $('Lead context from DB').item.json.ai_draft_pitch }}",
+        "options": {
+          "sendTo": "={{ $('Lead context from DB').item.json.email }}"
+        }
+      },
+      "type": "n8n-nodes-base.gmail",
+      "typeVersion": 2.2,
+      "position": [
+        -576,
+        336
+      ],
+      "id": "e04b4ca6-edaa-4116-b73a-74eab80f08e1",
+      "name": "Create a draft",
+      "webhookId": "208eed68-b966-45fc-8975-b6947ab6805e",
+      "credentials": {
+        "gmailOAuth2": {
+          "id": "q21YBcDJmU3GxpiG",
+          "name": "Gmail account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "batchSize": 5,
+        "options": {}
+      },
+      "type": "n8n-nodes-base.splitInBatches",
+      "typeVersion": 3,
+      "position": [
+        -176,
+        -128
+      ],
+      "id": "869002a3-493c-4119-9f72-b2df28db3884",
+      "name": "Loop Over Items"
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "INSERT INTO outbound_leads (email, first_name, last_name, company_name, domain, title, status)\nVALUES (\n  '{{ $('Webhook').item.json.body.email }}',\n  '{{ $('Webhook').item.json.body.first_name }}',\n  '{{ $('Webhook').item.json.body.last_name }}',\n  '{{ $('Webhook').item.json.body.company_name }}',\n  '{{ $('Webhook').item.json.body.domain }}',\n  '{{ $('Webhook').item.json.body.title }}',\n  'new'\n)\nON CONFLICT (email) DO UPDATE \nSET \n  title = EXCLUDED.title,\n  company_name = EXCLUDED.company_name,\n  first_name = EXCLUDED.first_name,\n  last_name = EXCLUDED.last_name\nRETURNING id, email, first_name, last_name, company_name, domain, title;",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.7,
+      "position": [
+        -1024,
+        16
+      ],
+      "id": "7bd25a11-0802-40a2-9592-70b6082b05a4",
+      "name": "Leads from DB",
+      "credentials": {
+        "postgres": {
+          "id": "HoEoCAC4oJRPR2sb",
+          "name": "Postgres account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "respondWith": "allIncomingItems",
+        "options": {
+          "responseCode": 200
+        }
+      },
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.5,
+      "position": [
+        -1248,
+        16
+      ],
+      "id": "4005d1a7-6b23-4a1c-897b-172b3c99379a",
+      "name": "Respond to Webhook"
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 3
+          },
+          "conditions": [
+            {
+              "id": "cbd24be6-70d7-40e0-b293-4468dded5250",
+              "leftValue": "={{ $json.email }}",
+              "rightValue": "=approve",
+              "operator": {
+                "type": "string",
+                "operation": "notEmpty",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.3,
+      "position": [
+        -800,
+        432
+      ],
+      "id": "9fdbf392-1883-4275-9ccd-5c5600629c9b",
+      "name": "Draft approved?"
+    },
+    {
+      "parameters": {
+        "mode": "runOnceForEachItem",
+        "jsCode": "const data = $input.item.json;\n\nreturn {\n  json: {\n    id: data.id,\n    email: data.email,\n    first_name: data.first_name || '',\n    last_name: data.last_name || '',\n    company_name: data.company_name || '',\n    title: data.title || '',\n    domain: data.domain || ''\n  }\n};"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -800,
+        16
+      ],
+      "id": "08481809-fa7a-4c03-bedc-85f449469e99",
+      "name": "DB records"
+    },
+    {
+      "parameters": {
+        "jsCode": "for (const item of $input.all()) {\n  let score = 50; // Базовый балл\n  const title = (item.json.title || '').toLowerCase();\n\n  // Добавляем топ-должности: VP, C-level, Head, Director, Founder\n  if (\n    title.includes('ceo') || \n    title.includes('founder') || \n    title.includes('owner') || \n    title.includes('head') ||\n    title.includes('vp') || \n    title.includes('president') || \n    title.includes('chief')\n  ) {\n    score += 35; // Сразу будет 85 баллов\n  } else if (\n    title.includes('director') || \n    title.includes('manager') || \n    title.includes('lead')\n  ) {\n    score += 20; // Будет 70 баллов\n  }\n\n  item.json.lead_score = score;\n}\n\nreturn $input.all();"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -576,
+        16
+      ],
+      "id": "56c00dfd-a862-41a2-8f6d-09d881be1647",
+      "name": "Lead scoring engine"
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 3
+          },
+          "conditions": [
+            {
+              "id": "3f581ee1-5162-4c44-8bbe-abd0b71e205f",
+              "leftValue": "={{ $json.lead_score }}",
+              "rightValue": 60,
+              "operator": {
+                "type": "number",
+                "operation": "gte"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.3,
+      "position": [
+        -352,
+        16
+      ],
+      "id": "57c91235-c048-4e21-a046-25cef6252d71",
+      "name": "Is score >= 60?"
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "UPDATE outbound_leads \nSET status = 'dropped_low_score', last_seen_at = NOW() \nWHERE email = '{{ $json.email }}';",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.7,
+      "position": [
+        -128,
+        112
+      ],
+      "id": "1d2f8d88-7e31-4b87-84fe-87ca906b065f",
+      "name": "Low-Fit leads",
+      "credentials": {
+        "postgres": {
+          "id": "HoEoCAC4oJRPR2sb",
+          "name": "Postgres account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 3
+          },
+          "conditions": [
+            {
+              "id": "539f60f8-b3cc-4e6a-a5cc-7e79a1204b1d",
+              "leftValue": "",
+              "rightValue": "",
+              "operator": {
+                "type": "string",
+                "operation": "equals",
+                "name": "filter.operator.equals"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.3,
+      "position": [
+        448,
+        -160
+      ],
+      "id": "98081324-133b-4552-a1d8-ebf78fd74dd6",
+      "name": "AI output valid?"
+    },
+    {
+      "parameters": {
+        "mode": "runOnceForEachItem",
+        "jsCode": "// Получаем ответ от родной ноды Gemini (текст лежит либо в content, либо в response.text, либо в text)\nconst aiRaw = $json.text || $json.response?.text || $json.content?.parts?.[0]?.text || '';\n\n// Очищаем от возможных markdown-оберток (```json ... ```)\nconst cleanJsonText = aiRaw.replace(/```(?:json)?/gi, '').replace(/```/g, '').trim();\n\nlet parsedAI = {};\ntry {\n  parsedAI = JSON.parse(cleanJsonText);\n} catch (e) {\n  parsedAI = {\n    qualification_status: \"qualified\",\n    value_prop: cleanJsonText || \"N/A\",\n    personalized_icebreaker: \"Great work scaling your team!\",\n    pain_point: \"Outbound workflow automation\"\n  };\n}\n\n// Забираем исходные данные лида из ноды очистки контекста:\nconst leadData = $('DB records').first().json;\n\nreturn {\n  email: leadData.email,\n  company_name: leadData.company_name,\n  domain: leadData.domain,\n  qualification: parsedAI.qualification_status || \"qualified\",\n  value_prop: parsedAI.value_prop || \"N/A\",\n  icebreaker: parsedAI.personalized_icebreaker || \"N/A\",\n  pain_point: parsedAI.pain_point || \"N/A\",\n  processed_at: new Date().toISOString()\n};"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        672,
+        -160
+      ],
+      "id": "f77c91bd-0180-4f61-b224-c3463ed6f50a",
+      "name": "Email payload"
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "INSERT INTO outbound_leads (email, company_name, domain, status, last_seen_at)\nVALUES (\n  '{{ $json.email }}',\n  '{{ $json.company_name }}',\n  '{{ $json.domain }}',\n  '{{ $json.qualification }}',\n  NOW()\n)\nON CONFLICT (email) \nDO UPDATE SET \n  status = EXCLUDED.status,\n  last_seen_at = NOW();",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.7,
+      "position": [
+        896,
+        -160
+      ],
+      "id": "8971a1a7-a29e-4aa3-899d-60d77afe8237",
+      "name": "Ready For review",
+      "credentials": {
+        "postgres": {
+          "id": "HoEoCAC4oJRPR2sb",
+          "name": "Postgres account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "UPDATE leads \nSET status = 'FAILED_AI_VALIDATION', error_log = 'Invalid or empty LLM output' \nWHERE id = {{ $('Message a model').item.json.id }};",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.7,
+      "position": [
+        720,
+        -16
+      ],
+      "id": "1fe90c83-1fa7-415e-ac8a-719051cff504",
+      "name": "LLM failure to DB",
+      "credentials": {
+        "postgres": {
+          "id": "HoEoCAC4oJRPR2sb",
+          "name": "Postgres account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "chatId": "7197857597",
+        "text": "=✅ Outreach draft created in Gmail! Company: {{ $('Lead context from DB').item.json.company || 'N/A' }} Recipient: {{ $json.message?.to || $('Lead context from DB').item.json.email || 'N/A' }} Subject: {{ $json.message?.subject || 'Personalized Pitch' }} Status: Ready for SDR review.",
+        "additionalFields": {}
+      },
+      "type": "n8n-nodes-base.telegram",
+      "typeVersion": 1.2,
+      "position": [
+        -400,
+        336
+      ],
+      "id": "0cafc1ad-ab6c-4fcf-8c50-b2b67e892f00",
+      "name": "Draft created",
+      "webhookId": "bc6f00ed-2b54-4595-989a-9ce1c7b4383a",
+      "credentials": {
+        "telegramApi": {
+          "id": "R6iqEzpLFW6wejK6",
+          "name": "Telegram account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "chatId": "7197857597",
+        "text": "=❌ Outreach draft rejected by manager. Company: {{ $('Lead context from DB').item.json.company || 'N/A' }} Status: Draft cancelled and logged.",
+        "additionalFields": {}
+      },
+      "type": "n8n-nodes-base.telegram",
+      "typeVersion": 1.2,
+      "position": [
+        -576,
+        528
+      ],
+      "id": "549bc327-3d64-4bf6-80dc-d0d246bd720a",
+      "name": "Action rejected",
+      "webhookId": "1c8f7096-abbe-4987-8a6a-8c26f0867475",
+      "credentials": {
+        "telegramApi": {
+          "id": "R6iqEzpLFW6wejK6",
+          "name": "Telegram account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "UPDATE outbound_leads \nSET status = 'approved', updated_at = NOW() \nWHERE email = '{{ $json.target }}'\nRETURNING id, email, first_name, email_draft;",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.7,
+      "position": [
+        -1024,
+        432
+      ],
+      "id": "cd7aaa25-2c55-4ee6-9ff0-c3262f6e9dc4",
+      "name": "Lead context from DB",
+      "credentials": {
+        "postgres": {
+          "id": "HoEoCAC4oJRPR2sb",
+          "name": "Postgres account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "mode": "runOnceForEachItem",
+        "jsCode": "const rawData = $json.callback_query?.data || $json.data || '';\n\nconst firstUnderscoreIndex = rawData.indexOf('_');\n\nlet action = 'approve';\nlet identifier = '';\n\nif (firstUnderscoreIndex !== -1) {\n  action = rawData.substring(0, firstUnderscoreIndex);\n  identifier = rawData.substring(firstUnderscoreIndex + 1).trim();\n} else {\n  action = rawData;\n}\n\nreturn {\n  json: {\n    raw_data: rawData,\n    action: action,\n    target: identifier\n  }\n};"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -1248,
+        432
+      ],
+      "id": "d2bea161-8ab1-4d07-a1b4-08bb526cbe70",
+      "name": "Telegram callback"
+    },
+    {
+      "parameters": {
+        "amount": 1.5
+      },
+      "type": "n8n-nodes-base.wait",
+      "typeVersion": 1.1,
+      "position": [
+        48,
+        -128
+      ],
+      "id": "9cb93049-8e94-4444-9eaf-99de64ee7417",
+      "name": "Rate limiter",
+      "webhookId": "75d7c3d2-3b9d-4537-af35-494543766e62"
+    }
+  ],
+  "pinData": {},
+  "connections": {
+    "Webhook": {
+      "main": [
+        [
+          {
+            "node": "Respond to Webhook",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Message a model": {
+      "main": [
+        [
+          {
+            "node": "AI output valid?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Telegram Trigger": {
+      "main": [
+        [
+          {
+            "node": "Telegram callback",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Send a text message": {
+      "main": [
+        []
+      ]
+    },
+    "Loop Over Items": {
+      "main": [
+        [],
+        [
+          {
+            "node": "Rate limiter",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Leads from DB": {
+      "main": [
+        [
+          {
+            "node": "DB records",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Create a draft": {
+      "main": [
+        [
+          {
+            "node": "Draft created",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Respond to Webhook": {
+      "main": [
+        [
+          {
+            "node": "Leads from DB",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Draft approved?": {
+      "main": [
+        [
+          {
+            "node": "Create a draft",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Action rejected",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "DB records": {
+      "main": [
+        [
+          {
+            "node": "Lead scoring engine",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Lead scoring engine": {
+      "main": [
+        [
+          {
+            "node": "Is score >= 60?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Is score >= 60?": {
+      "main": [
+        [
+          {
+            "node": "Loop Over Items",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Low-Fit leads",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "AI output valid?": {
+      "main": [
+        [
+          {
+            "node": "Email payload",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "LLM failure to DB",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Email payload": {
+      "main": [
+        [
+          {
+            "node": "Ready For review",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Ready For review": {
+      "main": [
+        [
+          {
+            "node": "Send a text message",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Lead context from DB": {
+      "main": [
+        [
+          {
+            "node": "Draft approved?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Telegram callback": {
+      "main": [
+        [
+          {
+            "node": "Lead context from DB",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Rate limiter": {
+      "main": [
+        [
+          {
+            "node": "Message a model",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": false,
+  "settings": {
+    "executionOrder": "v1",
+    "binaryMode": "separate"
+  },
+  "versionId": "d4492141-e1a8-4786-a265-a875c195e255",
+  "meta": {
+    "templateCredsSetupCompleted": true,
+    "instanceId": "f9a7c817f20493b97f9b806046fe7c4d057dffa022798e2fb8e7733a93b8574d"
+  },
+  "nodeGroups": [],
+  "id": "ncJgFFF569Cx1vuZ",
+  "tags": []
+}
